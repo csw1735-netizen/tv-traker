@@ -34,13 +34,13 @@
         resetPassword: (e) => sendPasswordResetEmail(auth, e),
         signOut: () => signOut(auth),
         onAuthChange: (cb) => onAuthStateChanged(auth, cb),
-        saveDoc: (uid, payload) => setDoc(doc(db, "tvDashboard", uid),
+        saveShared: (payload) => setDoc(doc(db, "tvShared", "main"),
           { data: payload, updatedAt: serverTimestamp() }),
-        loadDoc: async (uid) => {
-          const s = await getDoc(doc(db, "tvDashboard", uid));
+        loadShared: async () => {
+          const s = await getDoc(doc(db, "tvShared", "main"));
           return s.exists() ? (s.data().data || null) : null;
         },
-        watchDoc: (uid, cb) => onSnapshot(doc(db, "tvDashboard", uid), (s) => {
+        watchShared: (cb) => onSnapshot(doc(db, "tvShared", "main"), (s) => {
           if (s.metadata.hasPendingWrites) return;
           if (s.exists()) cb(s.data().data || null);
         }),
@@ -187,6 +187,14 @@
     .login-google:hover { border-color: var(--head); }
     .login-close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; min-height: 30px; padding: 0; border: none; background: transparent; color: var(--muted); font-size: 15px; cursor: pointer; border-radius: 50%; }
     .login-close:hover { background: #f1f3f5; }
+
+    /* 보기 전용(관리자 아님)일 때 편집 컨트롤 숨김 */
+    body:not(.owner) #addModelButton,
+    body:not(.owner) #updateButton,
+    body:not(.owner) .collect-settings,
+    body:not(.owner) .collect-status,
+    body:not(.owner) .admin-col,
+    body:not(.owner) .row-actions { display: none !important; }
 
     .auth-bar {
       display: flex; align-items: center; gap: 8px; justify-content: flex-end;
@@ -430,19 +438,24 @@
 
     let state = loadState();
 
+    // 관리자 이메일 — 이 계정으로 로그인해야 편집·수집·저장 가능. 나머지는 보기 전용.
+    const OWNER_EMAIL = "csw1735@gmail.com";
+
     let currentUser = null;
-    let cloudUnsub = null;
+    let isOwner = false;
+    let sharedUnsub = null;
     let cloudTimer = null;
     let suspendCloud = false;
 
     function save(message) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       if (message) document.getElementById("status").textContent = message;
-      if (!suspendCloud && currentUser && window.firebaseApi && window.firebaseApi.enabled) {
+      // 공유 문서에는 관리자만 저장 (보기 전용 사용자는 로컬에만)
+      if (!suspendCloud && isOwner && window.firebaseApi && window.firebaseApi.enabled) {
         if (cloudTimer) clearTimeout(cloudTimer);
         cloudTimer = setTimeout(() => {
-          window.firebaseApi.saveDoc(currentUser.uid, state).catch((e) =>
-            console.warn("클라우드 저장 실패:", e));
+          window.firebaseApi.saveShared(state).catch((e) =>
+            console.warn("공유 저장 실패:", e));
         }, 700);
       }
     }
@@ -482,7 +495,7 @@
         <tr>
           <th>제품군</th><th>모델명</th><th>브랜드</th><th>댓글수<br>(Total)</th>
           ${STORES.map((s) => `<th>${escapeHtml(s)}</th>`).join("")}
-          <th>비고</th><th>관리</th>
+          <th>비고</th><th class="admin-col">관리</th>
         </tr>
       `;
 
@@ -798,11 +811,32 @@
       clearLoginErr();
     }
 
+    function applyOwnerUI() {
+      document.body.classList.toggle("owner", isOwner);
+      const d = document.getElementById("surveyDate");
+      if (d) d.disabled = !isOwner;
+    }
+
+    function startSharedWatch() {
+      const api = window.firebaseApi;
+      if (!api || !api.enabled || sharedUnsub) return;
+      sharedUnsub = api.watchShared((remote) => {
+        if (!remote) return;
+        suspendCloud = true;
+        state = normalizeState(remote);
+        render();
+        suspendCloud = false;
+      });
+    }
+
     function setupAuth() {
       const api = window.firebaseApi;
       const bar = document.getElementById("authBar");
       if (!api || !api.enabled) { bar.hidden = true; return; }
       bar.hidden = false;
+      applyOwnerUI();
+      // 로그인 여부와 무관하게 모두 공유 데이터를 실시간으로 받아봄
+      startSharedWatch();
       const loginBtn = document.getElementById("loginButton");
       const logoutBtn = document.getElementById("logoutButton");
       const statusEl = document.getElementById("authStatus");
@@ -845,47 +879,29 @@
       logoutBtn.addEventListener("click", () => api.signOut());
 
       api.onAuthChange(async (user) => {
-        const wasIn = currentUser !== null;
+        currentUser = user;
+        isOwner = !!(user && user.email === OWNER_EMAIL);
+        applyOwnerUI();
         if (user) {
-          currentUser = user;
           loginBtn.hidden = true; logoutBtn.hidden = false;
           statusEl.classList.add("on");
-          statusEl.textContent = `👤 ${user.email || user.displayName || "로그인됨"}`;
-          try {
-            const cloud = await api.loadDoc(user.uid);
-            suspendCloud = true;
-            if (cloud) {
-              state = normalizeState(cloud);
-              render();
-              document.getElementById("status").textContent = "클라우드에서 불러왔습니다.";
-            } else {
-              suspendCloud = false;
-              await api.saveDoc(user.uid, state);
-              document.getElementById("status").textContent = "현재 데이터를 클라우드에 올렸습니다.";
-            }
-            suspendCloud = false;
-          } catch (e) { console.warn(e); }
-          if (cloudUnsub) cloudUnsub();
-          cloudUnsub = api.watchDoc(user.uid, (remote) => {
-            if (!remote) return;
-            suspendCloud = true;
-            state = normalizeState(remote);
-            render();
-            document.getElementById("status").textContent = "다른 기기 변경사항 반영됨";
-            suspendCloud = false;
-          });
+          statusEl.textContent = isOwner
+            ? `👤 ${user.email} · 관리자 (편집 가능)`
+            : `👤 ${user.email} · 보기 전용 (관리자 아님)`;
+          if (isOwner) {
+            // 공유 문서가 비어있으면(최초) 현재 데이터를 올림
+            try {
+              const shared = await api.loadShared();
+              if (!shared) {
+                await api.saveShared(state);
+                document.getElementById("status").textContent = "현재 데이터를 공유 문서에 올렸습니다.";
+              }
+            } catch (e) { console.warn(e); }
+          }
         } else {
-          currentUser = null;
           loginBtn.hidden = false; logoutBtn.hidden = true;
           statusEl.classList.remove("on");
-          statusEl.textContent = "로그인하면 PC ↔ 폰이 동기화됩니다";
-          if (cloudUnsub) { cloudUnsub(); cloudUnsub = null; }
-          if (wasIn) {
-            suspendCloud = true;
-            state = makeSeedState();
-            render();
-            suspendCloud = false;
-          }
+          statusEl.textContent = "보기 전용 — 관리자만 로그인해 편집합니다";
         }
       });
     }
