@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2026 TV 신제품 추적 대시보드</title>
+  <script src="firebase-config.js"></script>
+  <script type="module">
+    const cfg = window.FIREBASE_CONFIG || {};
+    const hasConfig = !!(cfg.apiKey && cfg.projectId && cfg.appId);
+    if (hasConfig) {
+      const [
+        { initializeApp },
+        { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+          setPersistence, browserLocalPersistence,
+          signInWithEmailAndPassword, createUserWithEmailAndPassword,
+          sendPasswordResetEmail },
+        { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp },
+      ] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js"),
+        import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"),
+      ]);
+      const app = initializeApp(cfg);
+      const auth = getAuth(app);
+      await setPersistence(auth, browserLocalPersistence).catch(() => {});
+      const db = getFirestore(app);
+      const provider = new GoogleAuthProvider();
+      window.firebaseApi = {
+        enabled: true,
+        signInWithGoogle: () => signInWithPopup(auth, provider),
+        signInWithEmail: (e, p) => signInWithEmailAndPassword(auth, e, p),
+        signUpWithEmail: (e, p) => createUserWithEmailAndPassword(auth, e, p),
+        resetPassword: (e) => sendPasswordResetEmail(auth, e),
+        signOut: () => signOut(auth),
+        onAuthChange: (cb) => onAuthStateChanged(auth, cb),
+        saveDoc: (uid, payload) => setDoc(doc(db, "tvDashboard", uid),
+          { data: payload, updatedAt: serverTimestamp() }),
+        loadDoc: async (uid) => {
+          const s = await getDoc(doc(db, "tvDashboard", uid));
+          return s.exists() ? (s.data().data || null) : null;
+        },
+        watchDoc: (uid, cb) => onSnapshot(doc(db, "tvDashboard", uid), (s) => {
+          if (s.metadata.hasPendingWrites) return;
+          if (s.exists()) cb(s.data().data || null);
+        }),
+      };
+    } else {
+      window.firebaseApi = { enabled: false };
+    }
+    window.dispatchEvent(new Event("firebaseReady"));
+  </script>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --ink: #20242a;
+      --muted: #667085;
+      --line: #dee2e6;
+      --head: #1e39b6;
+      --link: #0ca678;
+      --count: #e64980;
+      --shadow: 0 14px 36px rgba(20, 28, 45, 0.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      padding: 16px 12px;
+      font-size: 13px;
+    }
+    main { width: 100%; margin: 0 auto; }
+    h1 { margin: 0 0 4px; color: var(--head); font-size: 20px; }
+    .subtitle { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+    .subtitle input {
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 3px 6px; font: inherit; font-size: 12px;
+    }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 12px;
+    }
+    button {
+      min-height: 38px; padding: 7px 14px; border: 1px solid var(--line);
+      border-radius: 8px; background: #fff; color: var(--ink);
+      font: inherit; font-weight: 700; cursor: pointer;
+    }
+    button:hover { border-color: var(--head); }
+    button.primary { background: var(--head); border-color: var(--head); color: #fff; }
+    button.update { background: var(--link); border-color: var(--link); color: #fff; }
+    button.danger { color: #dc2626; }
+    button.danger:hover { border-color: #dc2626; background: #fee2e2; }
+
+    .table-wrap {
+      overflow: auto; border: 1px solid var(--line); border-radius: 8px;
+      background: #fff; box-shadow: var(--shadow); max-height: calc(100vh - 150px);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px; }
+    thead th {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--head); color: #fff; padding: 8px 4px;
+      border: 1px solid var(--line); text-align: center; font-weight: 500;
+    }
+    tbody td {
+      border: 1px solid var(--line); padding: 8px 4px;
+      text-align: center; vertical-align: top;
+    }
+    td.model { text-align: left; font-weight: 700; }
+    td.note { text-align: left; font-size: 11px; color: #555; }
+    td.total { color: var(--count); font-weight: bold; }
+    td.empty { background: #f1f3f5; }
+    .dash { color: #adb5bd; }
+    .entry { display: block; margin: 2px 0; }
+    .entry a, .entry span.val {
+      color: var(--link); font-weight: bold; text-decoration: none;
+    }
+    .entry a:hover { text-decoration: underline; }
+    .row-actions { white-space: nowrap; }
+    .row-actions button {
+      min-height: 26px; padding: 2px 8px; font-size: 11px; margin: 1px;
+    }
+
+    /* 모델 편집 모달 */
+    .modal {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(20, 28, 45, 0.5);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 20px; overflow-y: auto;
+    }
+    .modal[hidden] { display: none !important; }
+    .modal-content {
+      width: 100%; max-width: 760px; background: #fff;
+      border-radius: 12px; padding: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.3);
+    }
+    .modal-content h2 { margin: 0 0 14px; font-size: 17px; }
+    .field-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .field { flex: 1 1 160px; }
+    .field label { display: block; font-size: 11px; font-weight: 800; color: var(--muted); margin-bottom: 4px; }
+    .field input, .field select {
+      width: 100%; min-height: 36px; padding: 6px 8px;
+      border: 1px solid var(--line); border-radius: 7px; font: inherit;
+    }
+    .store-block { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+    .store-block summary {
+      padding: 8px 12px; font-weight: 800; cursor: pointer;
+      background: #f1f3f5; border-radius: 8px;
+    }
+    .store-entries { padding: 8px 12px; }
+    .entry-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+    .entry-row input { min-height: 32px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; }
+    .entry-row .size { width: 64px; flex-shrink: 0; }
+    .entry-row .link { flex: 1; min-width: 0; }
+    .entry-row .count { width: 64px; flex-shrink: 0; }
+    .entry-row .rm { min-height: 30px; padding: 2px 8px; color: #dc2626; }
+    .add-entry { min-height: 30px; padding: 3px 10px; font-size: 11px; }
+    .modal-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
+
+    .status { margin: 10px 0 0; color: var(--muted); font-size: 12px; min-height: 18px; }
+
+    /* 로그인 모달 */
+    .login-modal {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(20,28,45,.55);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .login-modal[hidden] { display: none !important; }
+    .login-modal-content {
+      position: relative; width: 100%; max-width: 380px; background: #fff;
+      border-radius: 14px; padding: 22px; box-shadow: 0 24px 60px rgba(20,28,45,.3);
+    }
+    .login-modal-content h3 { margin: 0 0 6px; font-size: 18px; }
+    .login-modal-help { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .login-field { display: block; margin-bottom: 10px; }
+    .login-field > span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 800; }
+    .login-field input { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    .login-error { margin: 4px 0 10px; padding: 8px 10px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 7px; color: #b91c1c; font-size: 12px; }
+    .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+    .login-actions button { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-weight: 800; cursor: pointer; }
+    .login-actions button.primary { background: var(--head); color: #fff; border-color: var(--head); }
+    .login-link { display: block; margin: 10px 0 0; padding: 4px 0; background: none; border: none; color: var(--head); font-size: 12px; text-decoration: underline; cursor: pointer; }
+    .login-divider { position: relative; margin: 16px 0; text-align: center; color: var(--muted); font-size: 11px; font-weight: 800; }
+    .login-divider::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--line); }
+    .login-divider span { position: relative; background: #fff; padding: 0 10px; }
+    .login-google { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-weight: 800; cursor: pointer; }
+    .login-google:hover { border-color: var(--head); }
+    .login-close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; min-height: 30px; padding: 0; border: none; background: transparent; color: var(--muted); font-size: 15px; cursor: pointer; border-radius: 50%; }
+    .login-close:hover { background: #f1f3f5; }
+
+    .auth-bar {
+      display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+      padding: 6px 10px; margin-bottom: 8px; background: #fff;
+      border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+      font-size: 12px;
+    }
+    .auth-status { flex: 1; color: var(--muted); font-weight: 700; }
+    .auth-status.on { color: var(--link); }
+    .auth-bar button { min-height: 32px; padding: 4px 12px; font-size: 12px; }
+    #loginButton { background: var(--head); color: #fff; border-color: var(--head); }
+
+    .collect-status {
+      font-size: 12px; font-weight: 700; color: var(--link);
+      white-space: nowrap;
+    }
+    .collect-status.working { color: var(--head); }
+    .collect-status.error { color: #dc2626; }
+
+    .collect-settings { font-size: 12px; }
+    .collect-settings summary { cursor: pointer; color: var(--muted); padding: 6px; }
+    .collect-settings-body {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    }
+    .collect-settings-body input[type="password"] {
+      min-height: 32px; padding: 5px 8px; border: 1px solid var(--line);
+      border-radius: 6px; font: inherit; font-size: 12px; min-width: 240px;
+    }
+
+    @media (max-width: 700px) {
+      .table-wrap { max-height: calc(100vh - 200px); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="auth-bar" id="authBar" hidden>
+      <span class="auth-status" id="authStatus">로그인하면 PC ↔ 폰이 동기화됩니다</span>
+      <button id="loginButton" type="button">로그인</button>
+      <button id="logoutButton" type="button" hidden>로그아웃</button>
+    </div>
+    <h1>2026 TV 신제품 추적 대시보드</h1>
+    <p class="subtitle">조사 기준일:
+      <input type="date" id="surveyDate">
+      · 총 <span id="modelCount">0</span>개 모델
+    </p>
+
+    <div class="toolbar">
+      <button class="primary" id="addModelButton" type="button">+ 모델 추가</button>
+      <button id="saveHtmlButton" type="button">HTML 저장</button>
+      <button class="update" id="updateButton" type="button" title="Best Buy 댓글수 수집 (PC에서 tv_app.py 실행 시)">댓글수 업데이트</button>
+      <details class="collect-settings">
+        <summary>수집 설정</summary>
+        <div class="collect-settings-body">
+          <label><input type="checkbox" id="useScraperApi"> BSIN 링크도 수집 (ScraperAPI 사용 — 크레딧 소모)</label>
+          <input type="password" id="scraperApiKey" placeholder="ScraperAPI 키 (선택, BSIN 해석용)">
+        </div>
+      </details>
+      <span class="collect-status" id="collectStatus" role="status"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <p class="status" id="status"></p>
+  </main>
+
+  <div class="login-modal" id="loginModal" role="dialog" aria-modal="true" hidden>
+    <div class="login-modal-content">
+      <h3>로그인 또는 회원가입</h3>
+      <p class="login-modal-help">이메일·비밀번호로 가입하거나 Google 계정으로 로그인하세요. 로그인하면 PC와 폰이 동기화됩니다.</p>
+      <label class="login-field"><span>이메일</span>
+        <input id="loginEmail" type="email" autocomplete="email" placeholder="name@example.com"></label>
+      <label class="login-field"><span>비밀번호 (6자 이상)</span>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••"></label>
+      <p class="login-error" id="loginError" role="alert" hidden></p>
+      <div class="login-actions">
+        <button id="emailLoginButton" type="button" class="primary">로그인</button>
+        <button id="emailSignupButton" type="button">새 계정 만들기</button>
+      </div>
+      <button id="forgotPasswordButton" type="button" class="login-link">비밀번호 잊으셨나요?</button>
+      <div class="login-divider"><span>또는</span></div>
+      <button id="googleLoginButton" type="button" class="login-google">Google 계정으로 로그인</button>
+      <button id="closeLoginButton" type="button" class="login-close" aria-label="닫기">✕</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modelModal" hidden>
+    <div class="modal-content">
+      <h2 id="modalTitle">모델 편집</h2>
+      <div class="field-row">
+        <div class="field">
+          <label>제품군</label>
+          <select id="fCategory"></select>
+        </div>
+        <div class="field">
+          <label>모델명</label>
+          <input id="fName" type="text" placeholder="예: LG C6">
+        </div>
+        <div class="field">
+          <label>브랜드</label>
+          <input id="fBrand" type="text" placeholder="예: LG">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field" style="flex:1 1 100%;">
+          <label>비고</label>
+          <input id="fNote" type="text" placeholder="메모 (선택)">
+        </div>
+      </div>
+      <div id="storeBlocks"></div>
+      <div class="modal-actions">
+        <button class="danger" id="deleteModelButton" type="button">이 모델 삭제</button>
+        <span style="flex:1"></span>
+        <button id="cancelModalButton" type="button">취소</button>
+        <button class="primary" id="saveModalButton" type="button">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="seed-data.js"></script>
+  <script>
+    const STORAGE_KEY = "tvTrackerState.v2";
+    const STORES = [
+      "Amazon(미국)", "Bestbuy(미국)", "삼성닷컴(미국)", "삼성닷컴(한국)",
+      "LG닷컴(미국)", "LG닷컴(한국)", "쿠팡(한국)", "네이버(한국)"
+    ];
+    const CATEGORIES = ["RGB / Micro RGB", "OLED", "Mini LED / QNED", "QLED", "Lifestyle / Art TV"];
+
+    const SEED_MODELS = [
+      ["RGB / Micro RGB", "TCL X11L", "TCL", ""],
+      ["RGB / Micro RGB", "Samsung R95H(한국RH95)", "Samsung", "BBY=삼성닷컴(US)"],
+      ["RGB / Micro RGB", "LG MRGB95B(한국96BK)", "LG", ""],
+      ["RGB / Micro RGB", "TCL RM9L", "TCL", ""],
+      ["RGB / Micro RGB", "Hisense 116UXS(2025)", "Hisense", ""],
+      ["OLED", "LG G6", "LG", ""],
+      ["OLED", "LG C6", "LG", ""],
+      ["OLED", "Samsung S95H(한국SH95)", "Samsung", ""],
+      ["OLED", "Samsung S90H(한국SH90)", "Samsung", ""],
+      ["Mini LED / QNED", "Samsung M80H(한국MH80)", "Samsung", ""],
+      ["Mini LED / QNED", "Samsung M70H(한국MH70/75)", "Samsung", "한국만 MH75 존재"],
+      ["Mini LED / QNED", "TCL QM6L(QM64L)", "TCL", "QM64L은 Fire TV only"],
+      ["Mini LED / QNED", "LG QNED84B", "LG", ""],
+      ["Lifestyle / Art TV", "Samsung Frame Pro LS03HW(한국LSH03W)", "Samsung", ""],
+      ["Lifestyle / Art TV", "Amazon Ember Artline", "Amazon", ""],
+      ["Lifestyle / Art TV", "TCL NXTVision Pro (A400 Pro)", "TCL", ""],
+      ["Lifestyle / Art TV", "Hisense Canvas TV S7SG", "Hisense", "S7SG Amazon모델은 S7N과 리뷰 섞임"],
+      ["Lifestyle / Art TV", "LG Gallery TV LX7", "LG", ""]
+    ];
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function emptyCells() {
+      const cells = {};
+      STORES.forEach((s) => { cells[s] = []; });
+      return cells;
+    }
+
+    function makeSeedState() {
+      // seed-data.js 가 로드돼 있으면 전체 셀(링크·댓글수)까지 포함된 시드 사용
+      if (Array.isArray(window.TV_SEED) && window.TV_SEED.length) {
+        return {
+          surveyDate: "2026-05-28",
+          models: window.TV_SEED.map((m) => {
+            const cells = emptyCells();
+            STORES.forEach((s) => {
+              if (Array.isArray(m.cells && m.cells[s])) {
+                cells[s] = m.cells[s].map((e) => ({
+                  size: String(e.size || ""),
+                  link: String(e.link || ""),
+                  count: (e.count === null || e.count === undefined) ? null : Number(e.count)
+                }));
+              }
+            });
+            return {
+              id: uid(),
+              category: String(m.category || CATEGORIES[0]),
+              name: String(m.name || ""),
+              brand: String(m.brand || ""),
+              note: String(m.note || ""),
+              cells
+            };
+          })
+        };
+      }
+      // 폴백: 스켈레톤 시드
+      return {
+        surveyDate: new Date().toISOString().slice(0, 10),
+        models: SEED_MODELS.map(([category, name, brand, note]) => ({
+          id: uid(), category, name, brand, note, cells: emptyCells()
+        }))
+      };
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return makeSeedState();
+      try {
+        return normalizeState(JSON.parse(saved));
+      } catch {
+        return makeSeedState();
+      }
+    }
+
+    function normalizeState(value) {
+      const out = { surveyDate: "", models: [] };
+      out.surveyDate = String(value.surveyDate || new Date().toISOString().slice(0, 10));
+      if (Array.isArray(value.models)) {
+        out.models = value.models.map((m) => {
+          const cells = emptyCells();
+          if (m.cells && typeof m.cells === "object") {
+            STORES.forEach((s) => {
+              if (Array.isArray(m.cells[s])) {
+                cells[s] = m.cells[s].map((e) => ({
+                  size: String(e.size || ""),
+                  link: String(e.link || ""),
+                  count: (e.count === null || e.count === undefined || e.count === "")
+                    ? null : Number(e.count)
+                }));
+              }
+            });
+          }
+          return {
+            id: m.id || uid(),
+            category: String(m.category || CATEGORIES[0]),
+            name: String(m.name || ""),
+            brand: String(m.brand || ""),
+            note: String(m.note || ""),
+            cells
+          };
+        });
+      }
+      return out;
+    }
+
+    let state = loadState();
+
+    let currentUser = null;
+    let cloudUnsub = null;
+    let cloudTimer = null;
+    let suspendCloud = false;
+
+    function save(message) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (message) document.getElementById("status").textContent = message;
+      if (!suspendCloud && currentUser && window.firebaseApi && window.firebaseApi.enabled) {
+        if (cloudTimer) clearTimeout(cloudTimer);
+        cloudTimer = setTimeout(() => {
+          window.firebaseApi.saveDoc(currentUser.uid, state).catch((e) =>
+            console.warn("클라우드 저장 실패:", e));
+        }, 700);
+      }
+    }
+
+    function modelTotal(model) {
+      let total = 0;
+      STORES.forEach((s) => {
+        (model.cells[s] || []).forEach((e) => {
+          if (typeof e.count === "number" && !Number.isNaN(e.count)) total += e.count;
+        });
+      });
+      return total;
+    }
+
+    function escapeHtml(v) {
+      return String(v)
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    }
+
+    function renderCell(entries) {
+      if (!entries || !entries.length) return '<span class="dash">-</span>';
+      return entries.map((e) => {
+        const label = e.size + (typeof e.count === "number" ? `(${e.count})` : "");
+        if (e.link) {
+          return `<span class="entry"><a href="${escapeHtml(e.link)}" target="_blank" rel="noopener">${escapeHtml(label)}</a></span>`;
+        }
+        return `<span class="entry"><span class="val">${escapeHtml(label)}</span></span>`;
+      }).join("");
+    }
+
+    function render() {
+      document.getElementById("surveyDate").value = state.surveyDate;
+      document.getElementById("modelCount").textContent = state.models.length;
+
+      document.getElementById("tableHead").innerHTML = `
+        <tr>
+          <th>제품군</th><th>모델명</th><th>브랜드</th><th>댓글수<br>(Total)</th>
+          ${STORES.map((s) => `<th>${escapeHtml(s)}</th>`).join("")}
+          <th>비고</th><th>관리</th>
+        </tr>
+      `;
+
+      document.getElementById("tableBody").innerHTML = state.models.map((m) => `
+        <tr>
+          <td>${escapeHtml(m.category)}</td>
+          <td class="model">${escapeHtml(m.name)}</td>
+          <td>${escapeHtml(m.brand)}</td>
+          <td class="total">${modelTotal(m) || '<span class="dash">-</span>'}</td>
+          ${STORES.map((s) => {
+            const entries = m.cells[s] || [];
+            const cls = entries.length ? "" : "empty";
+            return `<td class="${cls}">${renderCell(entries)}</td>`;
+          }).join("")}
+          <td class="note">${escapeHtml(m.note)}</td>
+          <td class="row-actions">
+            <button type="button" data-edit="${m.id}">편집</button>
+            <button type="button" class="danger" data-del="${m.id}">삭제</button>
+          </td>
+        </tr>
+      `).join("");
+
+      document.querySelectorAll("[data-edit]").forEach((b) =>
+        b.addEventListener("click", () => openEditor(b.dataset.edit)));
+      document.querySelectorAll("[data-del]").forEach((b) =>
+        b.addEventListener("click", () => deleteModel(b.dataset.del)));
+    }
+
+    // ---- 모델 편집기 ----
+    let editingId = null;
+
+    function buildStoreBlocks(model) {
+      const wrap = document.getElementById("storeBlocks");
+      wrap.innerHTML = STORES.map((s, si) => `
+        <details class="store-block" ${si === 0 ? "open" : ""}>
+          <summary>${escapeHtml(s)}</summary>
+          <div class="store-entries" data-store="${escapeHtml(s)}">
+            <div class="entry-list"></div>
+            <button type="button" class="add-entry" data-add-store="${escapeHtml(s)}">+ 사이즈 추가</button>
+          </div>
+        </details>
+      `).join("");
+
+      STORES.forEach((s) => {
+        const list = wrap.querySelector(`[data-store="${cssEscape(s)}"] .entry-list`);
+        const entries = (model.cells[s] || []);
+        entries.forEach((e) => list.appendChild(makeEntryRow(e)));
+      });
+
+      wrap.querySelectorAll("[data-add-store]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const store = btn.dataset.addStore;
+          const list = wrap.querySelector(`[data-store="${cssEscape(store)}"] .entry-list`);
+          list.appendChild(makeEntryRow({ size: "", link: "", count: null }));
+        });
+      });
+    }
+
+    function cssEscape(s) {
+      return s.replace(/"/g, '\\"');
+    }
+
+    function makeEntryRow(entry) {
+      const row = document.createElement("div");
+      row.className = "entry-row";
+      row.innerHTML = `
+        <input class="size" type="text" placeholder='55"' value="${escapeHtml(entry.size || "")}">
+        <input class="link" type="text" placeholder="https:// (선택)" value="${escapeHtml(entry.link || "")}">
+        <input class="count" type="number" min="0" placeholder="댓글수" value="${entry.count ?? ""}">
+        <button type="button" class="rm">✕</button>
+      `;
+      row.querySelector(".rm").addEventListener("click", () => row.remove());
+      return row;
+    }
+
+    function openEditor(id) {
+      const model = id ? state.models.find((m) => m.id === id) : null;
+      editingId = id || null;
+      document.getElementById("modalTitle").textContent = model ? "모델 편집" : "새 모델 추가";
+
+      const catSel = document.getElementById("fCategory");
+      catSel.innerHTML = CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+      catSel.value = model ? model.category : CATEGORIES[0];
+      document.getElementById("fName").value = model ? model.name : "";
+      document.getElementById("fBrand").value = model ? model.brand : "";
+      document.getElementById("fNote").value = model ? model.note : "";
+
+      buildStoreBlocks(model || { cells: emptyCells() });
+      document.getElementById("deleteModelButton").style.display = model ? "" : "none";
+      document.getElementById("modelModal").hidden = false;
+    }
+
+    function closeEditor() {
+      document.getElementById("modelModal").hidden = true;
+      editingId = null;
+    }
+
+    function readEditor() {
+      const cells = emptyCells();
+      document.querySelectorAll("#storeBlocks [data-store]").forEach((block) => {
+        const store = block.dataset.store;
+        block.querySelectorAll(".entry-row").forEach((row) => {
+          const size = row.querySelector(".size").value.trim();
+          const link = row.querySelector(".link").value.trim();
+          const countRaw = row.querySelector(".count").value.trim();
+          if (!size && !link && !countRaw) return;
+          cells[store].push({
+            size, link,
+            count: countRaw === "" ? null : Number(countRaw)
+          });
+        });
+      });
+      return {
+        category: document.getElementById("fCategory").value,
+        name: document.getElementById("fName").value.trim(),
+        brand: document.getElementById("fBrand").value.trim(),
+        note: document.getElementById("fNote").value.trim(),
+        cells
+      };
+    }
+
+    function saveEditor() {
+      const data = readEditor();
+      if (!data.name) {
+        alert("모델명을 입력해주세요.");
+        return;
+      }
+      if (editingId) {
+        const m = state.models.find((x) => x.id === editingId);
+        Object.assign(m, data);
+      } else {
+        state.models.push({ id: uid(), ...data });
+      }
+      save("저장했습니다.");
+      closeEditor();
+      render();
+    }
+
+    function deleteModel(id) {
+      const m = state.models.find((x) => x.id === id);
+      if (!m) return;
+      if (!confirm(`'${m.name}' 모델을 삭제할까요?`)) return;
+      state.models = state.models.filter((x) => x.id !== id);
+      save("모델을 삭제했습니다.");
+      if (editingId === id) closeEditor();
+      render();
+    }
+
+    // ---- HTML 내보내기 ----
+    function exportHtml() {
+      const head = `<tr>${["제품군","모델명","브랜드","댓글수(Total)",...STORES,"비고"]
+        .map((h) => `<th style="background:#1e39b6;color:#fff;padding:8px 4px;border:1px solid #dee2e6;font-weight:500;">${escapeHtml(h)}</th>`).join("")}</tr>`;
+      const rows = state.models.map((m) => {
+        const cellHtml = (s) => {
+          const entries = m.cells[s] || [];
+          if (!entries.length) return '<span style="color:#adb5bd;">-</span>';
+          return entries.map((e) => {
+            const label = e.size + (typeof e.count === "number" ? `(${e.count})` : "");
+            return e.link
+              ? `<a href="${escapeHtml(e.link)}" target="_blank" style="display:block;color:#0ca678;font-weight:bold;text-decoration:none;">${escapeHtml(label)}</a>`
+              : `<span style="display:block;color:#0ca678;font-weight:bold;">${escapeHtml(label)}</span>`;
+          }).join("");
+        };
+        return `<tr>
+          <td style="border:1px solid #dee2e6;padding:8px 4px;text-align:center;">${escapeHtml(m.category)}</td>
+          <td style="border:1px solid #dee2e6;padding:8px 4px;"><strong>${escapeHtml(m.name)}</strong></td>
+          <td style="border:1px solid #dee2e6;padding:8px 4px;text-align:center;">${escapeHtml(m.brand)}</td>
+          <td style="border:1px solid #dee2e6;padding:8px 4px;text-align:center;color:#e64980;font-weight:bold;">${modelTotal(m) || "-"}</td>
+          ${STORES.map((s) => `<td style="border:1px solid #dee2e6;padding:8px 4px;text-align:center;">${cellHtml(s)}</td>`).join("")}
+          <td style="border:1px solid #dee2e6;padding:8px 4px;font-size:11px;color:#555;">${escapeHtml(m.note)}</td>
+        </tr>`;
+      }).join("");
+
+      const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>2026 TV 제품군 출시 현황</title></head>
+<body style="font-family:Malgun Gothic,sans-serif;padding:24px;color:#333;">
+<h2 style="color:#1e39b6;font-size:18px;margin-bottom:4px;">2026 TV 제품군 출시 현황</h2>
+<p style="font-size:12px;color:#777;margin-bottom:16px;">조사 기준일: ${escapeHtml(state.surveyDate)} · 총 ${state.models.length}개 모델</p>
+<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead>${head}</thead><tbody>${rows}</tbody></table>
+</body></html>`;
+
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tv_dashboard_${state.surveyDate.replace(/-/g, "")}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      document.getElementById("status").textContent = "HTML 파일로 저장했습니다.";
+    }
+
+    // ---- 이벤트 ----
+    document.getElementById("addModelButton").addEventListener("click", () => openEditor(null));
+    document.getElementById("saveModalButton").addEventListener("click", saveEditor);
+    document.getElementById("cancelModalButton").addEventListener("click", closeEditor);
+    document.getElementById("deleteModelButton").addEventListener("click", () => {
+      if (editingId) deleteModel(editingId);
+    });
+    document.getElementById("modelModal").addEventListener("click", (e) => {
+      if (e.target.id === "modelModal") closeEditor();
+    });
+    document.getElementById("saveHtmlButton").addEventListener("click", exportHtml);
+    document.getElementById("surveyDate").addEventListener("change", (e) => {
+      state.surveyDate = e.target.value;
+      save("조사 기준일을 변경했습니다.");
+    });
+    document.getElementById("updateButton").addEventListener("click", runUpdate);
+
+    // ScraperAPI 키/옵션 localStorage 기억
+    const keyInput = document.getElementById("scraperApiKey");
+    const useChk = document.getElementById("useScraperApi");
+    keyInput.value = localStorage.getItem("tvScraperKey") || "";
+    useChk.checked = localStorage.getItem("tvUseScraper") === "1";
+    keyInput.addEventListener("change", () => localStorage.setItem("tvScraperKey", keyInput.value.trim()));
+    useChk.addEventListener("change", () => localStorage.setItem("tvUseScraper", useChk.checked ? "1" : "0"));
+
+    function setCollectStatus(text, cls) {
+      const el = document.getElementById("collectStatus");
+      el.textContent = text;
+      el.className = "collect-status" + (cls ? " " + cls : "");
+    }
+
+    async function runUpdate() {
+      const links = new Set();
+      state.models.forEach((m) => STORES.forEach((s) =>
+        (m.cells[s] || []).forEach((e) => {
+          if (e.link && e.link.includes("bestbuy.com")) links.add(e.link);
+        })
+      ));
+      if (!links.size) {
+        alert("수집할 Best Buy 링크가 없습니다.\n(현재는 Best Buy만 지원, 다른 스토어는 다음 단계)");
+        return;
+      }
+
+      const btn = document.getElementById("updateButton");
+      btn.disabled = true;
+      setCollectStatus(`⏳ 수집 중… Best Buy 링크 ${links.size}개`, "working");
+
+      let data;
+      try {
+        const resp = await fetch("/api/collect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            links: [...links],
+            scraperApiKey: keyInput.value.trim(),
+            useScraperApi: useChk.checked
+          })
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        data = await resp.json();
+      } catch (err) {
+        btn.disabled = false;
+        setCollectStatus("수집 실패 — 서버 연결 안 됨", "error");
+        alert("수집 서버에 연결하지 못했습니다.\n\nPC에서 tv_app.py로 실행 중일 때만 수집이 됩니다 (폰/배포 사이트에서는 불가).\n\n" + err.message);
+        return;
+      }
+
+      const results = data.results || {};
+      let applied = 0;
+      state.models.forEach((m) => STORES.forEach((s) =>
+        (m.cells[s] || []).forEach((e) => {
+          if (e.link && results[e.link] !== undefined && results[e.link] !== null) {
+            e.count = Number(results[e.link]);
+            applied += 1;
+          }
+        })
+      ));
+      save();
+      render();
+      btn.disabled = false;
+      const got = Object.values(results).filter((v) => v !== null && v !== undefined).length;
+      setCollectStatus(`✓ 완료 — ${got}/${links.size}개 수집, ${applied}개 갱신`, "");
+    }
+
+    render();
+    save();
+
+    // ---- Firebase 동기화 ----
+    function translateAuthError(err) {
+      const code = (err && err.code) || "";
+      const map = {
+        "auth/email-already-in-use": "이미 가입된 이메일입니다. 로그인을 시도해 보세요.",
+        "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
+        "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
+        "auth/wrong-password": "비밀번호가 일치하지 않습니다.",
+        "auth/user-not-found": "가입된 계정이 없습니다. '새 계정 만들기'를 눌러주세요.",
+        "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
+        "auth/too-many-requests": "너무 여러 번 시도했습니다. 잠시 후 다시 시도해 주세요.",
+        "auth/popup-closed-by-user": "로그인 창이 닫혔습니다.",
+        "auth/popup-blocked": "팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.",
+        "auth/unauthorized-domain": "이 도메인은 Firebase 승인 목록에 없습니다.",
+        "auth/missing-password": "비밀번호를 입력해 주세요.",
+        "auth/operation-not-allowed": "Firebase 콘솔에서 이메일 로그인이 켜져 있지 않습니다.",
+      };
+      return map[code] || (err && err.message) || "로그인 중 오류가 발생했습니다.";
+    }
+
+    function loginErr(msg) {
+      const el = document.getElementById("loginError");
+      el.textContent = msg; el.hidden = false;
+    }
+    function clearLoginErr() {
+      const el = document.getElementById("loginError");
+      el.hidden = true; el.textContent = "";
+    }
+    function openLoginModal() {
+      clearLoginErr();
+      document.getElementById("loginModal").hidden = false;
+      setTimeout(() => document.getElementById("loginEmail").focus(), 50);
+    }
+    function closeLoginModal() {
+      document.getElementById("loginModal").hidden = true;
+      clearLoginErr();
+    }
+
+    function setupAuth() {
+      const api = window.firebaseApi;
+      const bar = document.getElementById("authBar");
+      if (!api || !api.enabled) { bar.hidden = true; return; }
+      bar.hidden = false;
+      const loginBtn = document.getElementById("loginButton");
+      const logoutBtn = document.getElementById("logoutButton");
+      const statusEl = document.getElementById("authStatus");
+      const emailIn = document.getElementById("loginEmail");
+      const pwIn = document.getElementById("loginPassword");
+
+      loginBtn.addEventListener("click", openLoginModal);
+      document.getElementById("closeLoginButton").addEventListener("click", closeLoginModal);
+      document.getElementById("loginModal").addEventListener("click", (ev) => {
+        if (ev.target.id === "loginModal") closeLoginModal();
+      });
+
+      document.getElementById("emailLoginButton").addEventListener("click", async () => {
+        clearLoginErr();
+        const email = emailIn.value.trim(), pw = pwIn.value;
+        if (!email || !pw) { loginErr("이메일과 비밀번호를 모두 입력해 주세요."); return; }
+        try { await api.signInWithEmail(email, pw); closeLoginModal(); }
+        catch (e) { loginErr(translateAuthError(e)); }
+      });
+      document.getElementById("emailSignupButton").addEventListener("click", async () => {
+        clearLoginErr();
+        const email = emailIn.value.trim(), pw = pwIn.value;
+        if (!email || !pw) { loginErr("이메일과 비밀번호를 모두 입력해 주세요."); return; }
+        if (pw.length < 6) { loginErr("비밀번호는 6자 이상이어야 합니다."); return; }
+        try { await api.signUpWithEmail(email, pw); closeLoginModal(); }
+        catch (e) { loginErr(translateAuthError(e)); }
+      });
+      document.getElementById("googleLoginButton").addEventListener("click", async () => {
+        clearLoginErr();
+        try { await api.signInWithGoogle(); closeLoginModal(); }
+        catch (e) { loginErr(translateAuthError(e)); }
+      });
+      document.getElementById("forgotPasswordButton").addEventListener("click", async () => {
+        clearLoginErr();
+        const email = emailIn.value.trim();
+        if (!email) { loginErr("재설정 메일을 받을 이메일을 위에 입력해 주세요."); return; }
+        try { await api.resetPassword(email); loginErr(`재설정 메일을 ${email}로 보냈습니다.`); }
+        catch (e) { loginErr(translateAuthError(e)); }
+      });
+      logoutBtn.addEventListener("click", () => api.signOut());
+
+      api.onAuthChange(async (user) => {
+        const wasIn = currentUser !== null;
+        if (user) {
+          currentUser = user;
+          loginBtn.hidden = true; logoutBtn.hidden = false;
+          statusEl.classList.add("on");
+          statusEl.textContent = `👤 ${user.email || user.displayName || "로그인됨"}`;
+          try {
+            const cloud = await api.loadDoc(user.uid);
+            suspendCloud = true;
+            if (cloud) {
+              state = normalizeState(cloud);
+              render();
+              document.getElementById("status").textContent = "클라우드에서 불러왔습니다.";
+            } else {
+              suspendCloud = false;
+              await api.saveDoc(user.uid, state);
+              document.getElementById("status").textContent = "현재 데이터를 클라우드에 올렸습니다.";
+            }
+            suspendCloud = false;
+          } catch (e) { console.warn(e); }
+          if (cloudUnsub) cloudUnsub();
+          cloudUnsub = api.watchDoc(user.uid, (remote) => {
+            if (!remote) return;
+            suspendCloud = true;
+            state = normalizeState(remote);
+            render();
+            document.getElementById("status").textContent = "다른 기기 변경사항 반영됨";
+            suspendCloud = false;
+          });
+        } else {
+          currentUser = null;
+          loginBtn.hidden = false; logoutBtn.hidden = true;
+          statusEl.classList.remove("on");
+          statusEl.textContent = "로그인하면 PC ↔ 폰이 동기화됩니다";
+          if (cloudUnsub) { cloudUnsub(); cloudUnsub = null; }
+          if (wasIn) {
+            suspendCloud = true;
+            state = makeSeedState();
+            render();
+            suspendCloud = false;
+          }
+        }
+      });
+    }
+
+    if (window.firebaseApi !== undefined) setupAuth();
+    else window.addEventListener("firebaseReady", setupAuth, { once: true });
+  </script>
+</body>
+</html>
