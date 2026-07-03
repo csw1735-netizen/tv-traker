@@ -127,6 +127,11 @@
       border: 1px solid var(--line); padding: 8px 4px;
       text-align: center; vertical-align: top;
     }
+    tr.row-editing td {
+      background: #fff7d6 !important;
+      font-size: 1.12em;
+      box-shadow: inset 0 0 0 2px #f2b705;
+    }
     td.model { text-align: left; font-weight: 700; }
     td.note { text-align: left; font-size: 13px; color: #555; }
     td.total { color: var(--count); font-weight: bold; }
@@ -684,7 +689,7 @@
       `;
 
       document.getElementById("tableBody").innerHTML = state.models.map((m, i) => `
-        <tr>
+        <tr class="${m.id === editingId ? "row-editing" : ""}">
           <td>${escapeHtml(m.category)}</td>
           <td class="model">${escapeHtml(m.name)}</td>
           <td>${escapeHtml(m.brand)}</td>
@@ -731,7 +736,7 @@
     function buildStoreBlocks(model) {
       const wrap = document.getElementById("storeBlocks");
       wrap.innerHTML = STORES.map((s, si) => `
-        <details class="store-block" ${si === 0 ? "open" : ""}>
+        <details class="store-block">
           <summary>${escapeHtml(s)}</summary>
           <div class="store-entries" data-store="${escapeHtml(s)}">
             <div class="entry-list"></div>
@@ -808,6 +813,11 @@
     function openEditor(id) {
       const model = id ? state.models.find((m) => m.id === id) : null;
       editingId = id || null;
+      render();
+      if (editingId) {
+        const row = document.querySelector("tr.row-editing");
+        if (row) row.scrollIntoView({ block: "nearest" });
+      }
       document.getElementById("modalTitle").textContent = model ? "모델 편집" : "새 모델 추가";
 
       const catSel = document.getElementById("fCategory");
@@ -825,6 +835,7 @@
     function closeEditor() {
       document.getElementById("modelModal").hidden = true;
       editingId = null;
+      render();
     }
 
     function readEditor() {
