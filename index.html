@@ -3,6 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1e39b6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TV 트래커">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <title>2026 TV 신제품 추적 대시보드</title>
   <script src="firebase-config.js"></script>
   <script type="module">
@@ -78,14 +85,14 @@
       color: var(--ink);
       font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
       padding: 16px 12px;
-      font-size: 13px;
+      font-size: 15px;
     }
     main { width: 100%; margin: 0 auto; }
-    h1 { margin: 0 0 4px; color: var(--head); font-size: 20px; }
-    .subtitle { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+    h1 { margin: 0 0 4px; color: var(--head); font-size: 23px; }
+    .subtitle { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
     .subtitle input {
       border: 1px solid var(--line); border-radius: 6px;
-      padding: 3px 6px; font: inherit; font-size: 12px;
+      padding: 3px 6px; font: inherit; font-size: 14px;
     }
 
     .toolbar {
@@ -110,7 +117,7 @@
       overflow: auto; border: 1px solid var(--line); border-radius: 8px;
       background: #fff; box-shadow: var(--shadow); max-height: calc(100vh - 150px);
     }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1100px; }
     thead th {
       position: sticky; top: 0; z-index: 2;
       background: var(--head); color: #fff; padding: 8px 4px;
@@ -121,19 +128,28 @@
       text-align: center; vertical-align: top;
     }
     td.model { text-align: left; font-weight: 700; }
-    td.note { text-align: left; font-size: 11px; color: #555; }
+    td.note { text-align: left; font-size: 13px; color: #555; }
     td.total { color: var(--count); font-weight: bold; }
     td.empty { background: #f1f3f5; }
     .dash { color: #adb5bd; }
-    .entry { display: block; margin: 2px 0; }
+    .entry { display: block; margin: 2px 0; padding-bottom: 2px; }
+    .entry + .entry { border-top: 1px dashed var(--line); padding-top: 3px; }
     .entry a, .entry span.val {
       color: var(--link); font-weight: bold; text-decoration: none;
     }
     .entry a:hover { text-decoration: underline; }
+    .entry-price { display: block; font-size: 13px; color: var(--ink); font-weight: 700; margin-top: 1px; }
+    .entry-list-price { display: inline-block; font-size: 12px; color: #adb5bd; font-weight: 500; text-decoration: line-through; margin-left: 4px; }
+    .entry-breakdown { display: block; font-size: 12.5px; margin-top: 1px; white-space: nowrap; }
+    .entry-breakdown .bd-general { color: #868e96; }
+    .entry-breakdown .bd-verified { color: #1971c2; font-weight: 700; }
+    .entry-breakdown .bd-incentivized { color: #e8590c; font-weight: 700; }
+    .entry-row-meta { display: block; font-size: 12.5px; color: var(--muted); margin: 2px 0 6px; }
     .row-actions { white-space: nowrap; }
     .row-actions button {
-      min-height: 26px; padding: 2px 8px; font-size: 11px; margin: 1px;
+      min-height: 28px; padding: 2px 9px; font-size: 13px; margin: 1px;
     }
+    .row-actions .move-btn { padding: 2px 7px; font-size: 12px; }
 
     /* 모델 편집 모달 */
     .modal {
@@ -162,12 +178,13 @@
     }
     .store-entries { padding: 8px 12px; }
     .entry-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
-    .entry-row input { min-height: 32px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; }
+    .entry-row input { min-height: 32px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 14px; }
     .entry-row .size { width: 64px; flex-shrink: 0; }
     .entry-row .link { flex: 1; min-width: 0; }
     .entry-row .count { width: 64px; flex-shrink: 0; }
     .entry-row .rm { min-height: 30px; padding: 2px 8px; color: #dc2626; }
-    .add-entry { min-height: 30px; padding: 3px 10px; font-size: 11px; }
+    .entry-row .entry-move { min-height: 30px; padding: 2px 7px; font-size: 12px; flex-shrink: 0; }
+    .add-entry { min-height: 30px; padding: 3px 10px; font-size: 13px; }
     .modal-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
 
     .status { margin: 10px 0 0; color: var(--muted); font-size: 12px; min-height: 18px; }
@@ -221,6 +238,11 @@
     body:not(.owner) .admin-col,
     body:not(.owner) .row-actions { display: none !important; }
 
+    /* 로컬 서버(tv_app.py) 없이 배포된 사이트에서는 즉시 수집 버튼이 동작하지 않으므로 숨김 */
+    body.remote-site #updateButton,
+    body.remote-site .collect-settings { display: none !important; }
+    .remote-note { font-size: 11.5px; color: #868e96; }
+
     .auth-bar {
       display: flex; align-items: center; gap: 8px; justify-content: flex-end;
       padding: 6px 10px; margin-bottom: 8px; background: #fff;
@@ -253,9 +275,41 @@
     @media (max-width: 700px) {
       .table-wrap { max-height: calc(100vh - 200px); }
     }
+
+    /* ── PWA 설치 ── */
+    #installBtn { background: #eef0fb; color: var(--head); border-color: #c7cbf5; font-weight: 700; }
+    #installBtn:hover { background: #dfe3f9; }
+    .ios-modal {
+      position: fixed; inset: 0; z-index: 99;
+      background: rgba(15,17,30,.6); display: flex; align-items: flex-end; justify-content: center;
+    }
+    .ios-modal[hidden] { display: none; }
+    .ios-modal-card {
+      background: #fff; border-radius: 20px 20px 0 0; padding: 28px 24px 36px; width: 100%; max-width: 480px;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+    }
+    .ios-modal-card h2 { margin: 0 0 14px; font-size: 18px; font-weight: 800; }
+    .ios-modal-steps { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .ios-modal-steps li { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+    .ios-modal-steps .step-ic { font-size: 22px; flex: 0 0 32px; text-align: center; }
+    .ios-modal-close {
+      width: 100%; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+      background: var(--head); color: #fff; border: none; border-radius: 12px; padding: 14px;
+    }
   </style>
 </head>
 <body>
+  <div id="iosModal" class="ios-modal" hidden>
+    <div class="ios-modal-card">
+      <h2>📲 홈 화면에 추가하기</h2>
+      <ol class="ios-modal-steps">
+        <li><span class="step-ic">1️⃣</span><span>하단 가운데 <strong>공유 버튼</strong>(□↑)을 탭하세요</span></li>
+        <li><span class="step-ic">2️⃣</span><span>스크롤해서 <strong>"홈 화면에 추가"</strong>를 탭하세요</span></li>
+        <li><span class="step-ic">3️⃣</span><span>오른쪽 상단 <strong>"추가"</strong>를 탭하면 완료!</span></li>
+      </ol>
+      <button class="ios-modal-close" id="iosModalClose">확인</button>
+    </div>
+  </div>
   <main>
     <div class="auth-bar" id="authBar" hidden>
       <span class="auth-status" id="authStatus">로그인하면 PC ↔ 폰이 동기화됩니다</span>
@@ -275,13 +329,15 @@
       <label class="file-btn" id="jsonImportLabel" title="저장해둔 JSON 파일을 불러와 현재 데이터를 교체합니다">JSON 불러오기
         <input id="jsonImportInput" type="file" accept="application/json,.json" hidden>
       </label>
-      <button class="update" id="updateButton" type="button" title="Best Buy 댓글수 수집 (PC에서 tv_app.py 실행 시)">댓글수 업데이트</button>
+      <button class="update" id="updateButton" type="button" title="Best Buy 댓글수 + Amazon 일반/인증/협찬 리뷰수·가격 수집 (PC에서 tv_app.py 실행 시)">댓글수 업데이트</button>
+      <span class="remote-note" id="remoteNote" hidden>🖥 이 사이트는 조회 전용입니다 — 매주 월요일 자동 수집됩니다. 즉시 수집하려면 PC에서 tv_app.py 실행 후 접속하세요.</span>
       <button id="shareButton" type="button" title="이 페이지 주소를 복사 / 공유">🔗 공유</button>
+      <button id="installBtn" type="button" hidden>📲 앱 설치</button>
       <details class="collect-settings">
         <summary>수집 설정</summary>
         <div class="collect-settings-body">
-          <label><input type="checkbox" id="useScraperApi"> BSIN 링크도 수집 (ScraperAPI 사용 — 크레딧 소모)</label>
-          <input type="password" id="scraperApiKey" placeholder="ScraperAPI 키 (선택, BSIN 해석용)">
+          <label><input type="checkbox" id="useScraperApi"> ScraperAPI 사용 — BSIN 링크 해석 + <b>Amazon 리뷰 분류/가격 수집(필수)</b> · 크레딧 소모</label>
+          <input type="password" id="scraperApiKey" placeholder="ScraperAPI 키 (Amazon 수집에 필수, BSIN 해석에도 사용)">
         </div>
       </details>
       <span class="collect-status" id="collectStatus" role="status"></span>
@@ -351,6 +407,58 @@
 
   <script src="seed-data.js"></script>
   <script>
+    // 로컬 서버(tv_app.py, localhost/127.0.0.1) 밖에서 열렸으면 /api/collect가 없으므로
+    // "댓글수 업데이트" 버튼을 숨기고 자동수집 안내만 보여줌.
+    (function () {
+      const isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+      document.body.classList.toggle("remote-site", !isLocal);
+      const note = document.getElementById("remoteNote");
+      if (note) note.hidden = isLocal;
+    })();
+
+    // ── PWA 설치 ──
+    (function setupInstall() {
+      const btn = document.getElementById("installBtn");
+      const iosModal = document.getElementById("iosModal");
+      const iosClose = document.getElementById("iosModalClose");
+      if (!btn) return;
+
+      const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+      if (isStandalone) return;
+
+      let deferredPrompt = null;
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        btn.hidden = false;
+      });
+      window.addEventListener("appinstalled", () => {
+        btn.hidden = true;
+        deferredPrompt = null;
+      });
+      if (isIos) btn.hidden = false;
+
+      btn.addEventListener("click", async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          if (outcome === "accepted") btn.hidden = true;
+        } else if (isIos && iosModal) {
+          iosModal.hidden = false;
+        }
+      });
+      if (iosClose && iosModal) {
+        iosClose.addEventListener("click", () => { iosModal.hidden = true; });
+        iosModal.addEventListener("click", (e) => { if (e.target === iosModal) iosModal.hidden = true; });
+      }
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
+    })();
+
     const STORAGE_KEY = "tvTrackerState.v2";
     const STORES = [
       "Amazon(미국)", "Bestbuy(미국)", "삼성닷컴(미국)", "삼성닷컴(한국)",
@@ -389,6 +497,14 @@
       return cells;
     }
 
+    // Amazon 리뷰 분류 결과(일반/Verified/Incentivized) 정규화. 없으면 null.
+    function normalizeBreakdown(b) {
+      if (!b || typeof b !== "object") return null;
+      const g = Number(b.general), v = Number(b.verified), i = Number(b.incentivized);
+      if ([g, v, i].some((n) => Number.isNaN(n))) return null;
+      return { general: g, verified: v, incentivized: i };
+    }
+
     function makeSeedState() {
       // seed-data.js 가 로드돼 있으면 전체 셀(링크·댓글수)까지 포함된 시드 사용
       if (Array.isArray(window.TV_SEED) && window.TV_SEED.length) {
@@ -401,7 +517,10 @@
                 cells[s] = m.cells[s].map((e) => ({
                   size: String(e.size || ""),
                   link: String(e.link || ""),
-                  count: (e.count === null || e.count === undefined) ? null : Number(e.count)
+                  count: (e.count === null || e.count === undefined) ? null : Number(e.count),
+                  breakdown: normalizeBreakdown(e.breakdown),
+                  price: (e.price === null || e.price === undefined || e.price === "") ? null : Number(e.price),
+                  listPrice: (e.listPrice === null || e.listPrice === undefined || e.listPrice === "") ? null : Number(e.listPrice)
                 }));
               }
             });
@@ -448,7 +567,10 @@
                   size: String(e.size || ""),
                   link: String(e.link || ""),
                   count: (e.count === null || e.count === undefined || e.count === "")
-                    ? null : Number(e.count)
+                    ? null : Number(e.count),
+                  breakdown: normalizeBreakdown(e.breakdown),
+                  price: (e.price === null || e.price === undefined || e.price === "") ? null : Number(e.price),
+                  listPrice: (e.listPrice === null || e.listPrice === undefined || e.listPrice === "") ? null : Number(e.listPrice)
                 }));
               }
             });
@@ -500,20 +622,52 @@
       return total;
     }
 
+    // Amazon 등에서 수집된 breakdown을 모델 전체 기준으로 합산 (Total 컬럼 툴팁용)
+    function modelBreakdownTitle(model) {
+      const agg = { general: 0, verified: 0, incentivized: 0 };
+      let has = false;
+      STORES.forEach((s) => {
+        (model.cells[s] || []).forEach((e) => {
+          if (e.breakdown) {
+            has = true;
+            agg.general += e.breakdown.general;
+            agg.verified += e.breakdown.verified;
+            agg.incentivized += e.breakdown.incentivized;
+          }
+        });
+      });
+      return has ? `일반 ${agg.general} · 인증 ${agg.verified} · 협찬 ${agg.incentivized}` : "";
+    }
+
     function escapeHtml(v) {
       return String(v)
         .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
     }
 
+    function formatPrice(price) {
+      if (typeof price !== "number" || Number.isNaN(price)) return "";
+      return `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function breakdownHtml(bd) {
+      if (!bd) return "";
+      return `<span class="entry-breakdown">
+        <span class="bd-general">일반${bd.general}</span>·<span class="bd-verified">인증${bd.verified}</span>·<span class="bd-incentivized">협찬${bd.incentivized}</span>
+      </span>`;
+    }
+
     function renderCell(entries) {
       if (!entries || !entries.length) return '<span class="dash">-</span>';
       return entries.map((e) => {
         const label = e.size + (typeof e.count === "number" ? `(${e.count})` : "");
-        if (e.link) {
-          return `<span class="entry"><a href="${escapeHtml(e.link)}" target="_blank" rel="noopener">${escapeHtml(label)}</a></span>`;
-        }
-        return `<span class="entry"><span class="val">${escapeHtml(label)}</span></span>`;
+        const listPriceHtml = e.listPrice != null ? `<span class="entry-list-price">${formatPrice(e.listPrice)}</span>` : "";
+        const priceHtml = e.price != null ? `<span class="entry-price">${formatPrice(e.price)}${listPriceHtml}</span>` : "";
+        const bdHtml = breakdownHtml(e.breakdown);
+        const head = e.link
+          ? `<a href="${escapeHtml(e.link)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+          : `<span class="val">${escapeHtml(label)}</span>`;
+        return `<span class="entry">${head}${priceHtml}${bdHtml}</span>`;
       }).join("");
     }
 
@@ -529,12 +683,12 @@
         </tr>
       `;
 
-      document.getElementById("tableBody").innerHTML = state.models.map((m) => `
+      document.getElementById("tableBody").innerHTML = state.models.map((m, i) => `
         <tr>
           <td>${escapeHtml(m.category)}</td>
           <td class="model">${escapeHtml(m.name)}</td>
           <td>${escapeHtml(m.brand)}</td>
-          <td class="total">${modelTotal(m) || '<span class="dash">-</span>'}</td>
+          <td class="total" title="${escapeHtml(modelBreakdownTitle(m))}">${modelTotal(m) || '<span class="dash">-</span>'}</td>
           ${STORES.map((s) => {
             const entries = m.cells[s] || [];
             const cls = entries.length ? "" : "empty";
@@ -542,6 +696,8 @@
           }).join("")}
           <td class="note">${escapeHtml(m.note)}</td>
           <td class="row-actions">
+            <button type="button" class="move-btn" data-up="${m.id}" ${i === 0 ? "disabled" : ""} title="위로 이동">▲</button>
+            <button type="button" class="move-btn" data-down="${m.id}" ${i === state.models.length - 1 ? "disabled" : ""} title="아래로 이동">▼</button>
             <button type="button" data-edit="${m.id}">편집</button>
             <button type="button" class="danger" data-del="${m.id}">삭제</button>
           </td>
@@ -552,6 +708,21 @@
         b.addEventListener("click", () => openEditor(b.dataset.edit)));
       document.querySelectorAll("[data-del]").forEach((b) =>
         b.addEventListener("click", () => deleteModel(b.dataset.del)));
+      document.querySelectorAll("[data-up]").forEach((b) =>
+        b.addEventListener("click", () => moveModel(b.dataset.up, -1)));
+      document.querySelectorAll("[data-down]").forEach((b) =>
+        b.addEventListener("click", () => moveModel(b.dataset.down, 1)));
+    }
+
+    function moveModel(id, dir) {
+      const idx = state.models.findIndex((x) => x.id === id);
+      if (idx === -1) return;
+      const target = idx + dir;
+      if (target < 0 || target >= state.models.length) return;
+      const [m] = state.models.splice(idx, 1);
+      state.models.splice(target, 0, m);
+      save("모델 순서를 변경했습니다.");
+      render();
     }
 
     // ---- 모델 편집기 ----
@@ -590,14 +761,47 @@
 
     function makeEntryRow(entry) {
       const row = document.createElement("div");
-      row.className = "entry-row";
+      row.className = "entry-row-wrap";
+      // 자동 수집된 값(price/breakdown)은 폼 입력이 아니라 row에 그대로 보관했다가
+      // 저장 시 그대로 실어보냄 (수동으로는 편집하지 않음, "댓글수 업데이트"로만 갱신).
+      row.dataset.breakdown = entry.breakdown ? JSON.stringify(entry.breakdown) : "";
+      row.dataset.price = (entry.price ?? "") === null ? "" : String(entry.price ?? "");
+      row.dataset.listPrice = (entry.listPrice ?? "") === null ? "" : String(entry.listPrice ?? "");
+
+      const metaBits = [];
+      if (entry.price != null) metaBits.push(`현재가 ${formatPrice(entry.price)}`);
+      if (entry.listPrice != null) metaBits.push(`정가 ${formatPrice(entry.listPrice)}`);
+      if (entry.breakdown) {
+        const bd = entry.breakdown;
+        metaBits.push(`일반${bd.general}·인증${bd.verified}·협찬${bd.incentivized}`);
+      }
+      const metaHtml = metaBits.length
+        ? `<span class="entry-row-meta">🔎 자동수집: ${escapeHtml(metaBits.join(" · "))}</span>` : "";
+
       row.innerHTML = `
-        <input class="size" type="text" placeholder='55"' value="${escapeHtml(entry.size || "")}">
-        <input class="link" type="text" placeholder="https:// (선택)" value="${escapeHtml(entry.link || "")}">
-        <input class="count" type="number" min="0" placeholder="댓글수" value="${entry.count ?? ""}">
-        <button type="button" class="rm">✕</button>
+        <div class="entry-row">
+          <button type="button" class="entry-move" data-move="up" title="위로 이동">▲</button>
+          <button type="button" class="entry-move" data-move="down" title="아래로 이동">▼</button>
+          <input class="size" type="text" placeholder='55"' value="${escapeHtml(entry.size || "")}">
+          <input class="link" type="text" placeholder="https:// (선택)" value="${escapeHtml(entry.link || "")}">
+          <input class="count" type="number" min="0" placeholder="댓글수" value="${entry.count ?? ""}">
+          <button type="button" class="rm">✕</button>
+        </div>
+        ${metaHtml}
       `;
       row.querySelector(".rm").addEventListener("click", () => row.remove());
+      row.querySelector('[data-move="up"]').addEventListener("click", () => {
+        const prev = row.previousElementSibling;
+        if (prev) row.parentNode.insertBefore(row, prev);
+      });
+      row.querySelector('[data-move="down"]').addEventListener("click", () => {
+        const next = row.nextElementSibling;
+        if (next) row.parentNode.insertBefore(next, row);
+      });
+      // 링크를 손으로 바꾸면 예전 자동수집 값은 더 이상 유효하지 않으니 비워둠
+      row.querySelector(".link").addEventListener("change", () => {
+        row.dataset.breakdown = ""; row.dataset.price = ""; row.dataset.listPrice = "";
+      });
       return row;
     }
 
@@ -627,14 +831,20 @@
       const cells = emptyCells();
       document.querySelectorAll("#storeBlocks [data-store]").forEach((block) => {
         const store = block.dataset.store;
-        block.querySelectorAll(".entry-row").forEach((row) => {
-          const size = row.querySelector(".size").value.trim();
-          const link = row.querySelector(".link").value.trim();
-          const countRaw = row.querySelector(".count").value.trim();
+        block.querySelectorAll(".entry-row-wrap").forEach((wrap) => {
+          const size = wrap.querySelector(".size").value.trim();
+          const link = wrap.querySelector(".link").value.trim();
+          const countRaw = wrap.querySelector(".count").value.trim();
           if (!size && !link && !countRaw) return;
+          const breakdownRaw = wrap.dataset.breakdown || "";
+          const priceRaw = wrap.dataset.price || "";
+          const listPriceRaw = wrap.dataset.listPrice || "";
           cells[store].push({
             size, link,
-            count: countRaw === "" ? null : Number(countRaw)
+            count: countRaw === "" ? null : Number(countRaw),
+            breakdown: breakdownRaw ? normalizeBreakdown(JSON.parse(breakdownRaw)) : null,
+            price: priceRaw === "" ? null : Number(priceRaw),
+            listPrice: listPriceRaw === "" ? null : Number(listPriceRaw)
           });
         });
       });
@@ -684,9 +894,18 @@
           if (!entries.length) return '<span style="color:#adb5bd;">-</span>';
           return entries.map((e) => {
             const label = e.size + (typeof e.count === "number" ? `(${e.count})` : "");
-            return e.link
+            const head = e.link
               ? `<a href="${escapeHtml(e.link)}" target="_blank" style="display:block;color:#0ca678;font-weight:bold;text-decoration:none;">${escapeHtml(label)}</a>`
               : `<span style="display:block;color:#0ca678;font-weight:bold;">${escapeHtml(label)}</span>`;
+            const listPriceHtml = e.listPrice != null
+              ? ` <span style="font-size:10px;color:#adb5bd;text-decoration:line-through;">${formatPrice(e.listPrice)}</span>` : "";
+            const priceHtml = e.price != null
+              ? `<span style="display:block;font-size:11px;font-weight:700;">${formatPrice(e.price)}${listPriceHtml}</span>` : "";
+            const bdHtml = e.breakdown
+              ? `<span style="display:block;font-size:10.5px;white-space:nowrap;">
+                   <span style="color:#868e96;">일반${e.breakdown.general}</span>·<span style="color:#1971c2;font-weight:700;">인증${e.breakdown.verified}</span>·<span style="color:#e8590c;font-weight:700;">협찬${e.breakdown.incentivized}</span>
+                 </span>` : "";
+            return `<span style="display:block;margin:2px 0;padding-bottom:2px;border-top:1px dashed #dee2e6;">${head}${priceHtml}${bdHtml}</span>`;
           }).join("");
         };
         return `<tr>
@@ -825,12 +1044,23 @@
       const links = new Set();
       state.models.forEach((m) => STORES.forEach((s) =>
         (m.cells[s] || []).forEach((e) => {
-          if (e.link && e.link.includes("bestbuy.com")) links.add(e.link);
+          if (e.link && (e.link.includes("bestbuy.com") || e.link.includes("amazon.com"))) {
+            links.add(e.link);
+          }
         })
       ));
       if (!links.size) {
-        alert("수집할 Best Buy 링크가 없습니다.\n(현재는 Best Buy만 지원, 다른 스토어는 다음 단계)");
+        alert("수집할 Best Buy / Amazon 링크가 없습니다.\n(현재는 이 두 스토어만 지원, 다른 스토어는 다음 단계)");
         return;
+      }
+      const amzLinks = [...links].filter((l) => l.includes("amazon.com"));
+      if (amzLinks.length && !(useChk.checked && keyInput.value.trim())) {
+        const proceed = confirm(
+          `Amazon 링크 ${amzLinks.length}개가 있는데 ScraperAPI 키/사용 옵션이 꺼져 있습니다.\n` +
+          `Amazon은 무료 수집이 불가능해 이 링크들은 건너뜁니다.\n\n` +
+          `Best Buy 링크만 계속 수집할까요?`
+        );
+        if (!proceed) return;
       }
 
       const btn = document.getElementById("updateButton");
@@ -864,17 +1094,22 @@
       let applied = 0;
       state.models.forEach((m) => STORES.forEach((s) =>
         (m.cells[s] || []).forEach((e) => {
-          if (e.link && results[e.link] !== undefined && results[e.link] !== null) {
-            e.count = Number(results[e.link]);
+          const r = e.link ? results[e.link] : null;
+          if (!r) return;
+          if (r.count !== null && r.count !== undefined) {
+            e.count = Number(r.count);
             applied += 1;
           }
+          e.breakdown = normalizeBreakdown(r.breakdown);
+          e.price = (r.price === null || r.price === undefined) ? null : Number(r.price);
+          e.listPrice = (r.listPrice === null || r.listPrice === undefined) ? null : Number(r.listPrice);
         })
       ));
       save();
       render();
       btn.disabled = false;
       btn.textContent = origText;
-      const got = Object.values(results).filter((v) => v !== null && v !== undefined).length;
+      const got = Object.values(results).filter((v) => v && v.count !== null && v.count !== undefined).length;
       setCollectStatus(`✓ 완료 — ${got}/${links.size}개 수집, ${applied}개 갱신`, "");
     }
 
