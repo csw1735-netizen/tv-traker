@@ -143,8 +143,6 @@
       color: var(--link); font-weight: bold; text-decoration: none;
     }
     .entry a:hover { text-decoration: underline; }
-    .entry-price { display: block; font-size: 13px; color: var(--ink); font-weight: 700; margin-top: 1px; }
-    .entry-list-price { display: inline-block; font-size: 12px; color: #adb5bd; font-weight: 500; text-decoration: line-through; margin-left: 4px; }
     .entry-breakdown { display: block; font-size: 12.5px; margin-top: 1px; white-space: nowrap; }
     .entry-breakdown .bd-general { color: #868e96; }
     .entry-breakdown .bd-verified { color: #1971c2; font-weight: 700; }
@@ -334,14 +332,14 @@
       <label class="file-btn" id="jsonImportLabel" title="저장해둔 JSON 파일을 불러와 현재 데이터를 교체합니다">JSON 불러오기
         <input id="jsonImportInput" type="file" accept="application/json,.json" hidden>
       </label>
-      <button class="update" id="updateButton" type="button" title="Best Buy 댓글수 + Amazon 일반/인증/협찬 리뷰수·가격 수집 (PC에서 tv_app.py 실행 시)">댓글수 업데이트</button>
+      <button class="update" id="updateButton" type="button" title="Best Buy 댓글수 + Amazon 일반/인증/협찬 리뷰수 수집 (PC에서 tv_app.py 실행 시)">댓글수 업데이트</button>
       <span class="remote-note" id="remoteNote" hidden>🖥 이 사이트는 조회 전용입니다 — 매주 월요일 자동 수집됩니다. 즉시 수집하려면 PC에서 tv_app.py 실행 후 접속하세요.</span>
       <button id="shareButton" type="button" title="이 페이지 주소를 복사 / 공유">🔗 공유</button>
       <button id="installBtn" type="button" hidden>📲 앱 설치</button>
       <details class="collect-settings">
         <summary>수집 설정</summary>
         <div class="collect-settings-body">
-          <label><input type="checkbox" id="useScraperApi"> ScraperAPI 사용 — BSIN 링크 해석 + <b>Amazon 리뷰 분류/가격 수집(필수)</b> · 크레딧 소모</label>
+          <label><input type="checkbox" id="useScraperApi"> ScraperAPI 사용 — BSIN 링크 해석 + <b>Amazon 리뷰 분류(필수)</b> · 크레딧 소모</label>
           <input type="password" id="scraperApiKey" placeholder="ScraperAPI 키 (Amazon 수집에 필수, BSIN 해석에도 사용)">
         </div>
       </details>
@@ -466,7 +464,7 @@
 
     const STORAGE_KEY = "tvTrackerState.v2";
     const STORES = [
-      "Amazon(미국)", "Bestbuy(미국)", "삼성닷컴(미국)", "삼성닷컴(CA)", "삼성닷컴(한국)",
+      "Amazon(미국)", "Amazon(CA)", "Bestbuy(미국)", "Bestbuy(CA)", "월마트(미국)", "삼성닷컴(미국)", "삼성닷컴(CA)", "삼성닷컴(한국)",
       "LG닷컴(미국)", "LG닷컴(CA)", "LG닷컴(한국)", "쿠팡(한국)", "네이버(한국)"
     ];
     const CATEGORIES = ["RGB / Micro RGB", "OLED", "Mini LED / QNED", "QLED", "Lifestyle / Art TV"];
@@ -523,9 +521,7 @@
                   size: String(e.size || ""),
                   link: String(e.link || ""),
                   count: (e.count === null || e.count === undefined) ? null : Number(e.count),
-                  breakdown: normalizeBreakdown(e.breakdown),
-                  price: (e.price === null || e.price === undefined || e.price === "") ? null : Number(e.price),
-                  listPrice: (e.listPrice === null || e.listPrice === undefined || e.listPrice === "") ? null : Number(e.listPrice)
+                  breakdown: normalizeBreakdown(e.breakdown)
                 }));
               }
             });
@@ -573,9 +569,7 @@
                   link: String(e.link || ""),
                   count: (e.count === null || e.count === undefined || e.count === "")
                     ? null : Number(e.count),
-                  breakdown: normalizeBreakdown(e.breakdown),
-                  price: (e.price === null || e.price === undefined || e.price === "") ? null : Number(e.price),
-                  listPrice: (e.listPrice === null || e.listPrice === undefined || e.listPrice === "") ? null : Number(e.listPrice)
+                  breakdown: normalizeBreakdown(e.breakdown)
                 }));
               }
             });
@@ -650,11 +644,6 @@
         .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
     }
 
-    function formatPrice(price) {
-      if (typeof price !== "number" || Number.isNaN(price)) return "";
-      return `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-
     function breakdownHtml(bd) {
       if (!bd) return "";
       return `<span class="entry-breakdown">
@@ -666,13 +655,11 @@
       if (!entries || !entries.length) return '<span class="dash">-</span>';
       return entries.map((e) => {
         const label = e.size + (typeof e.count === "number" ? `(${e.count})` : "");
-        const listPriceHtml = e.listPrice != null ? `<span class="entry-list-price">${formatPrice(e.listPrice)}</span>` : "";
-        const priceHtml = e.price != null ? `<span class="entry-price">${formatPrice(e.price)}${listPriceHtml}</span>` : "";
         const bdHtml = breakdownHtml(e.breakdown);
         const head = e.link
           ? `<a href="${escapeHtml(e.link)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
           : `<span class="val">${escapeHtml(label)}</span>`;
-        return `<span class="entry">${head}${priceHtml}${bdHtml}</span>`;
+        return `<span class="entry">${head}${bdHtml}</span>`;
       }).join("");
     }
 
@@ -767,15 +754,11 @@
     function makeEntryRow(entry) {
       const row = document.createElement("div");
       row.className = "entry-row-wrap";
-      // 자동 수집된 값(price/breakdown)은 폼 입력이 아니라 row에 그대로 보관했다가
+      // 자동 수집된 breakdown은 폼 입력이 아니라 row에 그대로 보관했다가
       // 저장 시 그대로 실어보냄 (수동으로는 편집하지 않음, "댓글수 업데이트"로만 갱신).
       row.dataset.breakdown = entry.breakdown ? JSON.stringify(entry.breakdown) : "";
-      row.dataset.price = (entry.price ?? "") === null ? "" : String(entry.price ?? "");
-      row.dataset.listPrice = (entry.listPrice ?? "") === null ? "" : String(entry.listPrice ?? "");
 
       const metaBits = [];
-      if (entry.price != null) metaBits.push(`현재가 ${formatPrice(entry.price)}`);
-      if (entry.listPrice != null) metaBits.push(`정가 ${formatPrice(entry.listPrice)}`);
       if (entry.breakdown) {
         const bd = entry.breakdown;
         metaBits.push(`일반${bd.general}·인증${bd.verified}·협찬${bd.incentivized}`);
@@ -805,7 +788,7 @@
       });
       // 링크를 손으로 바꾸면 예전 자동수집 값은 더 이상 유효하지 않으니 비워둠
       row.querySelector(".link").addEventListener("change", () => {
-        row.dataset.breakdown = ""; row.dataset.price = ""; row.dataset.listPrice = "";
+        row.dataset.breakdown = "";
       });
       return row;
     }
@@ -848,14 +831,10 @@
           const countRaw = wrap.querySelector(".count").value.trim();
           if (!size && !link && !countRaw) return;
           const breakdownRaw = wrap.dataset.breakdown || "";
-          const priceRaw = wrap.dataset.price || "";
-          const listPriceRaw = wrap.dataset.listPrice || "";
           cells[store].push({
             size, link,
             count: countRaw === "" ? null : Number(countRaw),
-            breakdown: breakdownRaw ? normalizeBreakdown(JSON.parse(breakdownRaw)) : null,
-            price: priceRaw === "" ? null : Number(priceRaw),
-            listPrice: listPriceRaw === "" ? null : Number(listPriceRaw)
+            breakdown: breakdownRaw ? normalizeBreakdown(JSON.parse(breakdownRaw)) : null
           });
         });
       });
@@ -908,15 +887,11 @@
             const head = e.link
               ? `<a href="${escapeHtml(e.link)}" target="_blank" style="display:block;color:#0ca678;font-weight:bold;text-decoration:none;">${escapeHtml(label)}</a>`
               : `<span style="display:block;color:#0ca678;font-weight:bold;">${escapeHtml(label)}</span>`;
-            const listPriceHtml = e.listPrice != null
-              ? ` <span style="font-size:10px;color:#adb5bd;text-decoration:line-through;">${formatPrice(e.listPrice)}</span>` : "";
-            const priceHtml = e.price != null
-              ? `<span style="display:block;font-size:11px;font-weight:700;">${formatPrice(e.price)}${listPriceHtml}</span>` : "";
             const bdHtml = e.breakdown
               ? `<span style="display:block;font-size:10.5px;white-space:nowrap;">
                    <span style="color:#868e96;">일반${e.breakdown.general}</span>·<span style="color:#1971c2;font-weight:700;">인증${e.breakdown.verified}</span>·<span style="color:#e8590c;font-weight:700;">협찬${e.breakdown.incentivized}</span>
                  </span>` : "";
-            return `<span style="display:block;margin:2px 0;padding-bottom:2px;border-top:1px dashed #dee2e6;">${head}${priceHtml}${bdHtml}</span>`;
+            return `<span style="display:block;margin:2px 0;padding-bottom:2px;border-top:1px dashed #dee2e6;">${head}${bdHtml}</span>`;
           }).join("");
         };
         return `<tr>
@@ -1055,7 +1030,16 @@
       const links = new Set();
       state.models.forEach((m) => STORES.forEach((s) =>
         (m.cells[s] || []).forEach((e) => {
-          if (e.link && (e.link.includes("bestbuy.com") || e.link.includes("amazon.com"))) {
+          if (e.link && (
+            e.link.includes("bestbuy.com") ||
+            e.link.includes("amazon.com") ||
+            e.link.includes("walmart.com") ||
+            e.link.includes("samsung.com") ||
+            e.link.includes("lg.com") ||
+            e.link.includes("lge.co.kr") ||
+            e.link.includes("coupang.com") ||
+            e.link.includes("naver.com")
+          )) {
             links.add(e.link);
           }
         })
@@ -1112,8 +1096,6 @@
             applied += 1;
           }
           e.breakdown = normalizeBreakdown(r.breakdown);
-          e.price = (r.price === null || r.price === undefined) ? null : Number(r.price);
-          e.listPrice = (r.listPrice === null || r.listPrice === undefined) ? null : Number(r.listPrice);
         })
       ));
       save();
