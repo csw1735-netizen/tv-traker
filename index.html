@@ -8,8 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="TV 트래커">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="manifest.json">
   <title>2026 TV 신제품 추적 대시보드</title>
   <script src="firebase-config.js"></script>
   <script type="module">
@@ -57,10 +56,10 @@
           const s = await getDoc(doc(db, "tvShared", "main"));
           return s.exists() ? (s.data().data || null) : null;
         },
-        watchShared: (cb) => onSnapshot(doc(db, "tvShared", "main"), (s) => {
+        watchShared: (cb, onError) => onSnapshot(doc(db, "tvShared", "main"), (s) => {
           if (s.metadata.hasPendingWrites) return;
           if (s.exists()) cb(s.data().data || null);
-        }),
+        }, onError),
       };
     } else {
       window.firebaseApi = { enabled: false };
@@ -458,7 +457,7 @@
       }
 
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js").catch(() => {});
+        navigator.serviceWorker.register("sw.js").catch(() => {});
       }
     })();
 
@@ -1156,12 +1155,20 @@
     function startSharedWatch() {
       const api = window.firebaseApi;
       if (!api || !api.enabled || sharedUnsub) return;
+      const statusEl = document.getElementById("authStatus");
+      statusEl.textContent = "최신 데이터 동기화 중…";
       sharedUnsub = api.watchShared((remote) => {
         if (!remote) return;
         suspendCloud = true;
         state = normalizeState(remote);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         render();
         suspendCloud = false;
+        if (!currentUser) statusEl.textContent = "최신 데이터 동기화 완료 · 보기 전용";
+      }, (error) => {
+        console.warn("공유 데이터 동기화 실패:", error);
+        statusEl.textContent = "동기화 실패 · 새로고침하거나 네트워크를 확인하세요";
+        statusEl.classList.remove("on");
       });
     }
 

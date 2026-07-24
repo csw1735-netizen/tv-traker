@@ -1,0 +1,12 @@
+{
+  "name": "2026 TV 신제품 추적 대시보드",
+  "short_name": "TV 트래커",
+  "description": "TV 신제품과 공개 리뷰 수를 추적하는 대시보드",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1e39b6",
+  "lang": "ko",
+  "orientation": "portrait-primary"
+}
